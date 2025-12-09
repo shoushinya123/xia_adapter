@@ -2,7 +2,7 @@
 
 一个轻量级的 Golang 项目，用于对接飞书、企微平台，并集成 Dify 和 Coze Agent 能力。
 
-本项目已从 AstrBot 中独立出来，作为独立的平台适配器服务。
+本项目参考 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的实现思路，使用 Go 语言独立重新实现，作为独立的平台适配器服务。
 
 ## 功能特性
 
@@ -68,5 +68,20 @@ go build -o xia_adpter ./cmd/server
 
 ## License
 
-MIT
+本项目采用 [GNU General Public License v3.0](LICENSE) (GPL-3.0) 许可证。
+
+### 许可证说明
+
+- 本项目参考 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 的实现思路
+- AstrBot 使用 GPL-3.0 许可证
+- 为保持兼容性和遵循开源精神，本项目同样采用 GPL-3.0 许可证
+
+### 商业使用
+
+GPL-3.0 允许商业使用，但需要遵守以下要求：
+- 必须提供源代码
+- 必须保留版权声明和许可证
+- 衍生作品也必须使用 GPL-3.0 许可证
+
+更多信息请参阅 [LICENSE](LICENSE) 文件。
 
