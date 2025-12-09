@@ -81,38 +81,48 @@ func (a *Adapter) Start(ctx context.Context) error {
 		zap.String("bot_name", a.botName),
 	)
 
-	// 创建事件分发器
+	// 创建事件分发器（按照官方示例）
 	eventDispatcher := larkdispatcher.NewEventDispatcher("", "")
 	
-	// 注册消息接收事件处理器（使用 P1 版本）
-	eventDispatcher.OnP1MessageReceiveV1(func(ctx context.Context, event *larkim.P1MessageReceiveV1) error {
+	// 注册消息接收事件处理器（使用 P2 版本）
+	// 注意：WebSocket 长连接使用 P2 版本事件，事件类型为 "im.message.receive_v1"
+	eventDispatcher.OnP2MessageReceiveV1(func(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 		return a.handleMessageEvent(ctx, event)
 	})
 
-	// 创建 WebSocket 客户端选项
+	// 创建 WebSocket 客户端选项（按照官方示例，简化配置）
 	opts := []larkws.ClientOption{
 		larkws.WithEventHandler(eventDispatcher),
-		larkws.WithAutoReconnect(true),
 		larkws.WithLogLevel(larkcore.LogLevelError),
+		// 注意：不显式设置 WithAutoReconnect，SDK 默认开启
+		// 不显式设置 WithDomain，使用 SDK 默认值（https://open.feishu.cn）
 	}
 
+	// 只有在使用 larksuite.com 时才指定域名
 	if a.cfg.Domain == "larksuite.com" {
-		opts = append(opts, larkws.WithDomain("larksuite.com"))
-	} else {
-		opts = append(opts, larkws.WithDomain("feishu.cn"))
+		// 使用完整的 URL，包含协议前缀
+		opts = append(opts, larkws.WithDomain("https://open.larksuite.com"))
 	}
 
-	// 创建 WebSocket 客户端
+	// 创建 WebSocket 客户端（按照官方示例）
 	wsClient := larkws.NewClient(a.cfg.AppID, a.cfg.AppSecret, opts...)
 	a.wsClient = wsClient
 
 	// 在协程中启动 WebSocket 连接（Start 会阻塞）
+	// 按照官方示例，直接调用 Start，但我们需要在 goroutine 中运行以避免阻塞
 	go func() {
+		a.logger.Info("Starting WebSocket connection...")
 		if err := wsClient.Start(a.ctx); err != nil {
-			a.logger.Error("WebSocket client error", zap.Error(err))
+			if err == context.Canceled {
+				a.logger.Info("WebSocket client stopped by context")
+			} else {
+				a.logger.Error("WebSocket client error", zap.Error(err))
+			}
 		}
 	}()
 
+	// 等待一小段时间确保连接启动
+	time.Sleep(500 * time.Millisecond)
 	a.logger.Info("Lark WebSocket client started")
 
 	// 等待上下文取消
@@ -139,48 +149,106 @@ func (a *Adapter) Stop() error {
 	return nil
 }
 
-// handleMessageEvent 处理消息接收事件
-func (a *Adapter) handleMessageEvent(ctx context.Context, event *larkim.P1MessageReceiveV1) error {
+// handleMessageEvent 处理消息接收事件（P2 版本）
+func (a *Adapter) handleMessageEvent(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 	if event == nil || event.Event == nil {
 		return nil
 	}
 
 	data := event.Event
+	if data.Message == nil {
+		return nil
+	}
+
+	msg := data.Message
+	sender := data.Sender
 
 	// 获取会话 ID
-	sessionID := a.getSessionIDFromEvent(data)
+	sessionID := ""
+	if msg.ChatId != nil {
+		sessionID = *msg.ChatId
+	} else if sender != nil && sender.SenderId != nil {
+		// 如果是私聊，使用发送者 ID
+		if sender.SenderId.OpenId != nil {
+			sessionID = *sender.SenderId.OpenId
+		} else if sender.SenderId.UserId != nil {
+			sessionID = *sender.SenderId.UserId
+		}
+	}
+
+	// 获取用户 ID
+	userID := ""
+	if sender != nil && sender.SenderId != nil {
+		if sender.SenderId.OpenId != nil {
+			userID = *sender.SenderId.OpenId
+		} else if sender.SenderId.UserId != nil {
+			userID = *sender.SenderId.UserId
+		}
+	}
+
+	// 获取消息类型
+	messageType := "text"
+	if msg.MessageType != nil {
+		messageType = a.getMessageType(*msg.MessageType)
+	}
+
+	// 提取消息内容
+	content := ""
+	if msg.Content != nil {
+		content = a.extractTextContentFromP2Message(*msg.Content, messageType)
+	}
 
 	// 构建统一消息格式
 	msgObj := &message.Message{
 		Platform:    "lark",
 		SessionID:   sessionID,
-		UserID:      data.OpenID,
-		Content:     a.extractTextContentFromEvent(data),
-		MessageType: a.getMessageType(data.MsgType),
-		Metadata: map[string]string{
-			"message_id": data.OpenMessageID,
-			"chat_id":    data.OpenChatID,
-			"chat_type":  data.ChatType,
-		},
+		UserID:      userID,
+		Content:     content,
+		MessageType: messageType,
+		Metadata:    make(map[string]string),
+	}
+
+	// 添加元数据
+	if msg.MessageId != nil {
+		msgObj.Metadata["message_id"] = *msg.MessageId
+	}
+	if msg.ChatId != nil {
+		msgObj.Metadata["chat_id"] = *msg.ChatId
+	}
+	if msg.ChatType != nil {
+		msgObj.Metadata["chat_type"] = *msg.ChatType
 	}
 
 	// 处理图片消息
-	if data.MsgType == "image" && data.ImageKey != "" {
-		msgObj.Metadata["image_key"] = data.ImageKey
-		// 下载图片并转换为 base64
-		if imageData, err := a.downloadImage(data.OpenMessageID, data.ImageKey); err == nil {
-			msgObj.Content = base64.StdEncoding.EncodeToString(imageData)
-			msgObj.MessageType = "image"
-		} else {
-			a.logger.Warn("Failed to download image", zap.Error(err))
+	if messageType == "image" && msg.MessageId != nil {
+		// 从 content 中提取 image_key
+		if imageKey := a.extractImageKeyFromContent(*msg.Content); imageKey != "" {
+			msgObj.Metadata["image_key"] = imageKey
+			// 下载图片并转换为 base64
+			if imageData, err := a.downloadImage(*msg.MessageId, imageKey); err == nil {
+				msgObj.Content = base64.StdEncoding.EncodeToString(imageData)
+			} else {
+				a.logger.Warn("Failed to download image", zap.Error(err))
+			}
 		}
 	}
 
-	a.logger.Debug("Received Lark message",
-		zap.String("message_id", data.OpenMessageID),
+	a.logger.Info("Received Lark message",
+		zap.String("message_id", func() string {
+			if msg.MessageId != nil {
+				return *msg.MessageId
+			}
+			return ""
+		}()),
 		zap.String("session_id", msgObj.SessionID),
 		zap.String("user_id", msgObj.UserID),
 		zap.String("type", msgObj.MessageType),
+		zap.String("content", func() string {
+			if len(msgObj.Content) > 50 {
+				return msgObj.Content[:50] + "..."
+			}
+			return msgObj.Content
+		}()),
 	)
 
 	// 推送到消息队列
@@ -188,24 +256,48 @@ func (a *Adapter) handleMessageEvent(ctx context.Context, event *larkim.P1Messag
 	return nil
 }
 
-// getSessionIDFromEvent 从事件数据获取会话 ID
-func (a *Adapter) getSessionIDFromEvent(data *larkim.P1MessageReceiveV1Data) string {
-	if data.OpenChatID != "" {
-		return data.OpenChatID
+// extractTextContentFromP2Message 从 P2 消息的 Content 字段提取文本内容
+func (a *Adapter) extractTextContentFromP2Message(contentJSON string, messageType string) string {
+	// Content 是 JSON 字符串，需要解析
+	var contentMap map[string]interface{}
+	if err := json.Unmarshal([]byte(contentJSON), &contentMap); err != nil {
+		return ""
 	}
-	return data.OpenID
+
+	switch messageType {
+	case "text":
+		if text, ok := contentMap["text"].(string); ok {
+			text = a.removeAtMentions(text)
+			return strings.TrimSpace(text)
+		}
+	case "post":
+		// 处理富文本消息
+		return a.extractTextContent(contentMap, "post")
+	case "image":
+		// 图片消息，返回空字符串，后续会下载图片
+		return ""
+	default:
+		// 尝试提取文本
+		if text, ok := contentMap["text"].(string); ok {
+			return strings.TrimSpace(text)
+		}
+	}
+
+	return ""
 }
 
-// extractTextContentFromEvent 从事件数据提取文本内容
-func (a *Adapter) extractTextContentFromEvent(data *larkim.P1MessageReceiveV1Data) string {
-	// 优先使用 text_without_at_bot，如果没有则使用 text
-	text := data.TextWithoutAtBot
-	if text == "" {
-		text = data.Text
+// extractImageKeyFromContent 从消息内容中提取图片 key
+func (a *Adapter) extractImageKeyFromContent(contentJSON string) string {
+	var contentMap map[string]interface{}
+	if err := json.Unmarshal([]byte(contentJSON), &contentMap); err != nil {
+		return ""
 	}
-	// 移除 @ 用户标记
-	text = a.removeAtMentions(text)
-	return strings.TrimSpace(text)
+
+	if imageKey, ok := contentMap["image_key"].(string); ok {
+		return imageKey
+	}
+
+	return ""
 }
 
 
