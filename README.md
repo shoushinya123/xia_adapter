@@ -66,6 +66,16 @@ go build -o xia_adpter ./cmd/server
 - `agent`: Agent 配置（Dify、Coze）
 - `server`: 服务器配置
 
+## 平台和 Agent 验证状态
+
+### ✅ 已验证
+- **Dify Agent**: 已验证通过，支持流式响应和会话连续性
+- **飞书 (Lark) 平台**: 已验证通过，支持 WebSocket 长连接和消息收发
+
+### ⚠️ 未验证
+- **Coze Agent**: 未验证，代码已实现但未测试
+- **企微 (WeCom) 平台**: 未验证，代码已实现但未测试
+
 ## License
 
 本项目采用 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0) 许可证。

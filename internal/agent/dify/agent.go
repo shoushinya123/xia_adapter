@@ -46,6 +46,16 @@ func (a *Agent) Chat(ctx context.Context, req *message.AgentRequest) (*message.A
 		payload["user"] = a.cfg.UserID
 	}
 	
+	// 调试日志：检查 payload 中的 conversation_id
+	if cid, ok := payload["conversation_id"].(string); ok {
+		a.logger.Info("Dify request payload contains conversation_id",
+			zap.String("conversation_id", cid),
+			zap.Bool("is_uuid", len(cid) == 36 && strings.Count(cid, "-") == 4),
+		)
+	} else {
+		a.logger.Info("Dify request payload does not contain conversation_id, will create new conversation")
+	}
+	
 	url := fmt.Sprintf("%s/chat-messages", a.cfg.APIBase)
 
 	jsonData, err := json.Marshal(payload)
@@ -58,8 +68,28 @@ func (a *Agent) Chat(ctx context.Context, req *message.AgentRequest) (*message.A
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.cfg.APIKey))
+	// 检查 API Key 是否为空
+	if a.cfg.APIKey == "" {
+		return nil, fmt.Errorf("Dify API key is empty")
+	}
+
+	// 设置 Authorization header
+	authHeader := fmt.Sprintf("Bearer %s", a.cfg.APIKey)
+	httpReq.Header.Set("Authorization", authHeader)
 	httpReq.Header.Set("Content-Type", "application/json")
+	
+	// 调试日志
+	a.logger.Debug("Dify API request",
+		zap.String("url", url),
+		zap.String("app_id", a.cfg.AppID),
+		zap.Bool("has_api_key", a.cfg.APIKey != ""),
+		zap.String("auth_header_prefix", func() string {
+			if len(authHeader) > 20 {
+				return authHeader[:20] + "..."
+			}
+			return authHeader
+		}()),
+	)
 
 	resp, err := a.client.Do(httpReq)
 	if err != nil {

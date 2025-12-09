@@ -3,6 +3,8 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 
 	"xia_adpter/internal/agent/coze"
@@ -125,6 +127,35 @@ func (p *Pipeline) processMessage(ctx context.Context, msg *message.Message) {
 
 	// 将 Agent 响应转换为统一消息格式
 	responseMsg := p.converter.FromAgentResponse(agentResp, msg)
+	
+	// 如果 Agent 返回了 conversation_id，保存到原始消息的 Metadata 中
+	// 这样下次请求时可以使用相同的 conversation_id
+	// 注意：只保存有效的 UUID 格式的 conversation_id
+	if agentResp != nil && agentResp.Metadata != nil {
+		if cid, ok := agentResp.Metadata["conversation_id"]; ok && cid != "" {
+			// 验证 conversation_id 是否是有效的 UUID
+			uuidRegex := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+			if uuidRegex.MatchString(strings.ToLower(cid)) {
+				if msg.Metadata == nil {
+					msg.Metadata = make(map[string]string)
+				}
+				msg.Metadata["conversation_id"] = cid
+				// 同时保存到响应消息的 Metadata 中
+				if responseMsg.Metadata == nil {
+					responseMsg.Metadata = make(map[string]string)
+				}
+				responseMsg.Metadata["conversation_id"] = cid
+			} else {
+				// 如果不是有效的 UUID，清除之前可能错误保存的 conversation_id
+				if msg.Metadata != nil {
+					delete(msg.Metadata, "conversation_id")
+				}
+				if responseMsg.Metadata != nil {
+					delete(responseMsg.Metadata, "conversation_id")
+				}
+			}
+		}
+	}
 
 	// 发送回复到平台
 	p.mu.RLock()

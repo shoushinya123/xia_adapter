@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -48,8 +49,25 @@ func (c *Converter) ToAgentRequest(msg *Message) *AgentRequest {
 	req := &AgentRequest{
 		Query:     msg.Content,
 		SessionID: msg.SessionID,
-		UserID:     msg.UserID,
-		ImageURLs:  []string{},
+		UserID:    msg.UserID,
+		ImageURLs: []string{},
+		Metadata:  make(map[string]string),
+	}
+	
+	// 复制原始消息的 Metadata，以便保存和复用 conversation_id
+	// 注意：只复制有效的 UUID 格式的 conversation_id，清除错误的格式
+	if msg.Metadata != nil {
+		for k, v := range msg.Metadata {
+			// 如果是 conversation_id，验证是否为有效的 UUID
+			if k == "conversation_id" {
+				if isUUID(v) {
+					req.Metadata[k] = v
+				}
+				// 如果不是 UUID，不复制，让 Dify 创建新的会话
+			} else {
+				req.Metadata[k] = v
+			}
+		}
 	}
 
 	// 处理图片消息
@@ -234,13 +252,50 @@ func (c *Converter) SplitLongText(text string, maxLen int) []string {
 	return chunks
 }
 
+// isUUID 检查字符串是否是有效的 UUID 格式
+func isUUID(s string) bool {
+	uuidRegex := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	return uuidRegex.MatchString(strings.ToLower(s))
+}
+
 // BuildDifyRequest 构建 Dify 请求
 func (c *Converter) BuildDifyRequest(req *AgentRequest, variables map[string]interface{}) map[string]interface{} {
 	payload := map[string]interface{}{
-		"query":          req.Query,
-		"user":           req.SessionID,
-		"response_mode":  "streaming",
-		"conversation_id": req.SessionID, // 使用 session_id 作为 conversation_id
+		"query":         req.Query,
+		"user":          req.SessionID,
+		"response_mode": "streaming",
+	}
+
+	// 检查是否有有效的 conversation_id（UUID 格式）
+	// 优先从 Metadata 中获取之前保存的 conversation_id
+	var conversationID string
+	if req.Metadata != nil {
+		if cid, ok := req.Metadata["conversation_id"]; ok && cid != "" {
+			// 验证 conversation_id 是否是有效的 UUID
+			// 如果之前错误地保存了非 UUID 格式的 ID（如飞书的 chat_id），则忽略并清除
+			if isUUID(cid) {
+				conversationID = cid
+			} else {
+				// 如果不是 UUID，清除错误的 conversation_id，防止下次继续使用
+				delete(req.Metadata, "conversation_id")
+			}
+		}
+	}
+	
+	// 如果没有从 Metadata 获取到有效的 UUID，尝试使用 SessionID（但必须是 UUID 格式）
+	// 注意：SessionID 通常是飞书的 chat_id（oc_xxx），不是 UUID，所以这里通常不会匹配
+	if conversationID == "" && isUUID(req.SessionID) {
+		conversationID = req.SessionID
+	}
+
+	// 只有当 conversation_id 是有效的 UUID 时才传递
+	// 否则让 Dify 自动创建新的会话
+	// 重要：这里必须再次验证，确保不会传递错误的 conversation_id
+	if conversationID != "" {
+		if isUUID(conversationID) {
+			payload["conversation_id"] = conversationID
+		}
+		// 如果不是 UUID，不设置 conversation_id，让 Dify 自动创建
 	}
 
 	// 添加变量
