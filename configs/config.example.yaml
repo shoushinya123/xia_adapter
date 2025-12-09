@@ -1,0 +1,36 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+platform:
+  lark:
+    enabled: true
+    app_id: "your_lark_app_id"
+    app_secret: "your_lark_app_secret"
+    domain: "feishu.cn"  # feishu.cn 或 larksuite.com
+    bot_name: "AgentBot"
+  
+  wecom:
+    enabled: true
+    corp_id: "your_corp_id"
+    secret: "your_secret"
+    token: "your_token"
+    encoding_aes_key: "your_encoding_aes_key"
+    host: "0.0.0.0"
+    port: 8888
+
+agent:
+  dify:
+    enabled: true
+    api_key: "your_dify_api_key"
+    api_base: "https://api.dify.ai/v1"
+    app_id: "your_dify_app_id"
+    user_id: "default_user"
+  
+  coze:
+    enabled: true
+    api_key: "your_coze_api_key"
+    api_base: "https://api.coze.cn"
+    bot_id: "your_coze_bot_id"
+    user_id: "default_user"
+

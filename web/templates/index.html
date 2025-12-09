@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Xia Adapter 管理面板</h1>
+            <p class="subtitle">统一管理飞书、企微平台和 AI Agent 配置</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">飞书:</span>
+                <span id="lark-status" class="status-badge">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">企微:</span>
+                <span id="wecom-status" class="status-badge">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Dify:</span>
+                <span id="dify-status" class="status-badge">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Coze:</span>
+                <span id="coze-status" class="status-badge">-</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="platform">平台配置</button>
+            <button class="tab-btn" data-tab="agent">Agent 配置</button>
+            <button class="tab-btn" data-tab="server">服务器配置</button>
+        </div>
+
+        <form id="config-form">
+            <!-- 平台配置 -->
+            <div class="tab-content active" id="platform-tab">
+                <div class="section">
+                    <h2>飞书 (Lark) 配置</h2>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="lark-enabled" name="platform.lark.enabled">
+                            <span>启用飞书平台</span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="lark-app-id">App ID</label>
+                            <input type="text" id="lark-app-id" name="platform.lark.app_id" placeholder="your_lark_app_id">
+                        </div>
+                        <div class="form-group">
+                            <label for="lark-app-secret">App Secret</label>
+                            <input type="password" id="lark-app-secret" name="platform.lark.app_secret" placeholder="your_lark_app_secret">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="lark-domain">域名</label>
+                            <select id="lark-domain" name="platform.lark.domain">
+                                <option value="feishu.cn">feishu.cn</option>
+                                <option value="larksuite.com">larksuite.com</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="lark-bot-name">机器人名称</label>
+                            <input type="text" id="lark-bot-name" name="platform.lark.bot_name" placeholder="AgentBot">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>企微 (WeCom) 配置</h2>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="wecom-enabled" name="platform.wecom.enabled">
+                            <span>启用企微平台</span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="wecom-corp-id">Corp ID</label>
+                            <input type="text" id="wecom-corp-id" name="platform.wecom.corp_id" placeholder="your_corp_id">
+                        </div>
+                        <div class="form-group">
+                            <label for="wecom-secret">Secret</label>
+                            <input type="password" id="wecom-secret" name="platform.wecom.secret" placeholder="your_secret">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="wecom-token">Token</label>
+                            <input type="text" id="wecom-token" name="platform.wecom.token" placeholder="your_token">
+                        </div>
+                        <div class="form-group">
+                            <label for="wecom-aes-key">Encoding AES Key</label>
+                            <input type="text" id="wecom-aes-key" name="platform.wecom.encoding_aes_key" placeholder="your_encoding_aes_key">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="wecom-host">Host</label>
+                            <input type="text" id="wecom-host" name="platform.wecom.host" placeholder="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="wecom-port">Port</label>
+                            <input type="number" id="wecom-port" name="platform.wecom.port" placeholder="8888">
+                        </div>
+                        <div class="form-group">
+                            <label for="wecom-agent-id">Agent ID</label>
+                            <input type="number" id="wecom-agent-id" name="platform.wecom.agent_id" placeholder="1000001">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agent 配置 -->
+            <div class="tab-content" id="agent-tab">
+                <div class="section">
+                    <h2>Dify Agent 配置</h2>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="dify-enabled" name="agent.dify.enabled">
+                            <span>启用 Dify Agent</span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dify-api-key">API Key</label>
+                            <input type="password" id="dify-api-key" name="agent.dify.api_key" placeholder="your_dify_api_key">
+                        </div>
+                        <div class="form-group">
+                            <label for="dify-api-base">API Base</label>
+                            <input type="text" id="dify-api-base" name="agent.dify.api_base" placeholder="https://api.dify.ai/v1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dify-app-id">App ID</label>
+                            <input type="text" id="dify-app-id" name="agent.dify.app_id" placeholder="your_dify_app_id">
+                        </div>
+                        <div class="form-group">
+                            <label for="dify-user-id">User ID</label>
+                            <input type="text" id="dify-user-id" name="agent.dify.user_id" placeholder="default_user">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Coze Agent 配置</h2>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="coze-enabled" name="agent.coze.enabled">
+                            <span>启用 Coze Agent</span>
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="coze-api-key">API Key</label>
+                            <input type="password" id="coze-api-key" name="agent.coze.api_key" placeholder="your_coze_api_key">
+                        </div>
+                        <div class="form-group">
+                            <label for="coze-api-base">API Base</label>
+                            <input type="text" id="coze-api-base" name="agent.coze.api_base" placeholder="https://api.coze.cn">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="coze-bot-id">Bot ID</label>
+                            <input type="text" id="coze-bot-id" name="agent.coze.bot_id" placeholder="your_coze_bot_id">
+                        </div>
+                        <div class="form-group">
+                            <label for="coze-user-id">User ID</label>
+                            <input type="text" id="coze-user-id" name="agent.coze.user_id" placeholder="default_user">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 服务器配置 -->
+            <div class="tab-content" id="server-tab">
+                <div class="section">
+                    <h2>服务器配置</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="server-host">Host</label>
+                            <input type="text" id="server-host" name="server.host" placeholder="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="server-port">Port</label>
+                            <input type="number" id="server-port" name="server.port" placeholder="8080">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" id="reload-btn" class="btn btn-secondary">重新加载</button>
+                <button type="submit" class="btn btn-primary">保存配置</button>
+            </div>
+        </form>
+
+        <div id="message" class="message"></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+
